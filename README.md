@@ -7,10 +7,11 @@
 - 🔧 **LINE OA 整合**：完整的 LINE Messaging API 整合
 - 👥 **群組管理**：取得群組資訊和成員列表
 - 🔔 **@ 提醒監控**：自動偵測並記錄群組中的 @ 提醒
-- 📧 **多種通知方式**：Email 和 Webhook 通知
+- 📢 **即時通知**：聲音提醒和桌面通知
 - 🎨 **現代化介面**：美觀且易用的 Web 介面
 - 🔒 **安全驗證**：LINE Webhook 簽名驗證
 - 💾 **本地儲存**：設定和資料本地儲存
+- ☁️ **雲端部署**：支援 Render.com 一鍵部署
 
 ## 🚀 快速開始
 
@@ -54,6 +55,42 @@ npm start
 
 瀏覽器開啟：`http://localhost:3000/提醒系統.html`
 
+## ☁️ 雲端部署
+
+### 使用 Render.com 部署
+
+1. **Fork 或 Clone 專案**
+   ```bash
+   git clone https://github.com/your-username/line-oa-reminder-system.git
+   ```
+
+2. **推送到 GitHub**
+   ```bash
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
+   ```
+
+3. **在 Render.com 建立服務**
+   - 前往 [Render.com](https://render.com)
+   - 點擊 "New +" → "Web Service"
+   - 連接 GitHub 倉庫
+   - 設定：
+     - **Name**: `line-oa-reminder-system`
+     - **Environment**: `Node`
+     - **Build Command**: `npm install`
+     - **Start Command**: `npm start`
+     - **Plan**: `Free`
+
+4. **設定環境變數**
+   - `NODE_ENV` = `production`
+   - `PORT` = `10000`
+
+5. **取得雲端 URL**
+   - 部署完成後會得到：`https://your-app-name.onrender.com`
+   - 前端介面：`https://your-app-name.onrender.com/提醒系統.html`
+   - Webhook URL：`https://your-app-name.onrender.com/webhook`
+
 ## 📋 LINE API 設定步驟
 
 ### 1. 建立 LINE Official Account
@@ -69,8 +106,15 @@ npm start
 ### 2. 設定 Webhook URL
 
 在 LINE Developers Console 中設定 Webhook URL：
+
+**本地開發**：
 ```
-http://your-domain.com/webhook
+http://localhost:3000/webhook
+```
+
+**雲端部署**：
+```
+https://your-app-name.onrender.com/webhook
 ```
 
 ### 3. 取得群組 ID
@@ -106,9 +150,35 @@ GET /api/mentions?groupId=xxx&limit=20
 POST /webhook
 ```
 
-## 📧 通知設定
+## 📢 通知設定
 
-### Email 通知
+### 即時通知功能
+
+系統提供多種即時通知方式：
+
+#### 1. 聲音提醒
+- 自動播放提示音
+- 可在設定中開啟/關閉
+
+#### 2. 桌面通知
+- 使用瀏覽器桌面通知 API
+- 顯示 @ 提醒內容
+- 可在設定中開啟/關閉
+
+#### 3. 關鍵字過濾
+- 只顯示包含指定關鍵字的 @ 提醒
+- 支援多個關鍵字（用逗號分隔）
+
+### 設定範例
+
+在系統介面中設定：
+- **關鍵字過濾**：`緊急,重要,急件`
+- **啟用聲音提醒**：✅
+- **啟用桌面通知**：✅
+
+### 舊版通知方式（可選）
+
+#### Email 通知
 
 在 `.env` 中設定 SMTP 資訊：
 
@@ -121,7 +191,7 @@ SMTP_PASS=your_app_password
 NOTIFICATION_EMAIL=notifications@yourcompany.com
 ```
 
-### Webhook 通知
+#### Webhook 通知
 
 設定外部 Webhook URL：
 
@@ -131,11 +201,18 @@ WEBHOOK_URL=https://your-webhook-endpoint.com/webhook
 
 ## 🎯 使用流程
 
+### 本地開發
 1. **設定 LINE OA**：填入 Channel ID、Secret 和 Access Token
 2. **測試連線**：確認與 LINE API 的連線正常
 3. **設定群組**：填入要監控的群組 ID
 4. **開始監控**：啟動 @ 提醒監控功能
-5. **設定通知**：選擇 Email 或 Webhook 通知方式
+5. **設定通知**：選擇聲音提醒和桌面通知
+
+### 雲端部署
+1. **部署到雲端**：使用 Render.com 部署
+2. **設定 LINE Webhook**：將 Webhook URL 設為雲端地址
+3. **測試連線**：在雲端介面中測試連線
+4. **開始使用**：設定群組並開始監控
 
 ## 🔍 @ 提醒偵測邏輯
 
@@ -188,16 +265,46 @@ A: 確認 Webhook URL 設定正確且伺服器可從外網存取
 ### Q: 群組訊息無法取得
 A: LINE API 限制，只能透過 Webhook 接收即時訊息
 
-### Q: Email 通知無法發送
-A: 檢查 SMTP 設定，Gmail 需要使用應用程式密碼
+### Q: Access Token 無效
+A: 重新生成 Access Token，確認 Bot 權限設定正確
 
 ### Q: 群組 ID 不知道
 A: 將 Bot 加入群組後發送訊息，查看 Webhook 日誌
 
+### Q: 雲端部署失敗
+A: 檢查 Render.com 的建置日誌，確認環境變數設定正確
+
+### Q: 桌面通知不工作
+A: 確認瀏覽器已授權通知權限，或手動點擊授權
+
+### Q: 聲音提醒不播放
+A: 確認瀏覽器允許自動播放音訊，檢查音量設定
+
+## 🛠️ 技術架構
+
+- **前端**：HTML5, CSS3, JavaScript (ES6+)
+- **後端**：Node.js, Express.js
+- **API**：LINE Messaging API
+- **部署**：Render.com
+- **版本控制**：Git, GitHub
+
 ## 📞 支援
 
-如有問題或建議，請聯繫開發團隊。
+如有問題或建議，請：
+1. 查看 [常見問題](#-常見問題) 區塊
+2. 檢查 [GitHub Issues](https://github.com/david2fat/line-oa-reminder-system/issues)
+3. 聯繫開發團隊
 
 ## 📄 授權
 
-MIT License 
+MIT License
+
+## 🚀 更新日誌
+
+### v1.0.0 (2025-01-20)
+- ✅ 初始版本發布
+- ✅ LINE OA 整合
+- ✅ @ 提醒監控
+- ✅ 即時通知功能
+- ✅ 雲端部署支援
+- ✅ 現代化 UI 介面 
