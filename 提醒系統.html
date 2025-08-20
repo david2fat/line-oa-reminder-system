@@ -380,20 +380,32 @@
                 const response = await fetch('/api/line/test-connection', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        channelId,
-                        accessToken
+                        channelId: channelId.trim(),
+                        accessToken: accessToken.trim()
                     })
                 });
 
-                const result = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                let result;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    const text = await response.text();
+                    console.log('Response text:', text);
+                    result = { error: '伺服器回應格式錯誤' };
+                }
                 
                 if (response.ok && result.success) {
                     showStatus('連線成功！Bot 名稱：' + result.profile.displayName, 'success');
                 } else {
-                    const errorMessage = result.error || '請檢查設定';
+                    const errorMessage = result.error || `HTTP ${response.status}: ${response.statusText}`;
                     showStatus('連線失敗：' + errorMessage, 'error');
                     console.error('API 錯誤:', result);
                 }
@@ -416,10 +428,15 @@
             showStatus('正在取得群組資訊...', 'info');
             
             try {
-                // 模擬 API 呼叫
-                const groupInfo = await simulateGetGroupInfo(groupId, accessToken);
-                displayGroupInfo(groupInfo);
-                showStatus('群組資訊已取得！', 'success');
+                const response = await fetch(`/api/line/group/${groupId}?accessToken=${accessToken}`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayGroupInfo(result);
+                    showStatus('群組資訊已取得！', 'success');
+                } else {
+                    showStatus('取得群組資訊失敗：' + (result.error || '請檢查群組 ID'), 'error');
+                }
             } catch (error) {
                 showStatus('取得群組資訊失敗：' + error.message, 'error');
             }
