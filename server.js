@@ -11,10 +11,39 @@ const PORT = process.env.PORT || 3000;
 // 中間件
 app.use(cors());
 app.use(express.json());
+
+// 設定 Content Security Policy
+app.use((req, res, next) => {
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://www.gstatic.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.line.me;"
+    );
+    next();
+});
+
 app.use(express.static('.'));
 
 // LINE API 設定
 const LINE_API_BASE = 'https://api.line.me/v2';
+
+// 健康檢查端點
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'LINE OA 客戶提醒系統運行中',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Webhook 測試端點
+app.get('/webhook', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'Webhook 端點正常',
+        method: 'GET',
+        note: 'LINE 會使用 POST 方法發送訊息到此端點'
+    });
+});
 
 // 驗證 LINE 簽名
 function verifySignature(body, signature, channelSecret) {
