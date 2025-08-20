@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE OA 客戶提醒系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #00B900 0%, #00C300 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #00B900;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #00B900;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00B900 0%, #00C300 100%);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,185,0,0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 5px 15px rgba(108,117,125,0.3);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .mentions-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: white;
+        }
+
+        .mention-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mention-item:last-child {
+            border-bottom: none;
+        }
+
+        .mention-info {
+            flex: 1;
+        }
+
+        .mention-user {
+            font-weight: bold;
+            color: #00B900;
+        }
+
+        .mention-time {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .mention-message {
+            margin-top: 5px;
+            color: #333;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #00B900;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes highlight {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 LINE OA 客戶提醒系統</h1>
+            <p>整合 LINE Official Account 與群組管理，自動抓取 @ 提醒</p>
+        </div>
+
+        <div class="main-content">
+            <!-- LINE OA 設定區塊 -->
+            <div class="section">
+                <h2>🔧 LINE OA 設定</h2>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="channelId">Channel ID:</label>
+                        <input type="text" id="channelId" placeholder="請輸入您的 Channel ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="channelSecret">Channel Secret:</label>
+                        <input type="password" id="channelSecret" placeholder="請輸入您的 Channel Secret">
+                    </div>
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="accessToken">Access Token:</label>
+                        <input type="password" id="accessToken" placeholder="請輸入您的 Access Token">
+                    </div>
+                    <div class="form-group">
+                        <label for="webhookUrl">Webhook URL:</label>
+                        <input type="url" id="webhookUrl" placeholder="https://your-domain.com/webhook">
+                    </div>
+                </div>
+                <button class="btn" onclick="testConnection()">🔗 測試連線</button>
+                <button class="btn btn-secondary" onclick="saveSettings()">💾 儲存設定</button>
+            </div>
+
+            <!-- 群組管理區塊 -->
+            <div class="section">
+                <h2>👥 群組管理</h2>
+                <div class="form-group">
+                    <label for="groupId">群組 ID:</label>
+                    <input type="text" id="groupId" placeholder="請輸入群組 ID">
+                </div>
+                <button class="btn" onclick="getGroupInfo()">📋 取得群組資訊</button>
+                <button class="btn btn-secondary" onclick="getGroupMembers()">👤 取得群組成員</button>
+                
+                <div id="groupInfo" class="mentions-list" style="display: none;">
+                    <h3>群組資訊</h3>
+                    <div id="groupInfoContent"></div>
+                </div>
+            </div>
+
+            <!-- @ 提醒監控區塊 -->
+            <div class="section">
+                <h2>🔔 @ 提醒監控</h2>
+                <div class="form-group">
+                    <label for="monitorInterval">監控間隔 (秒):</label>
+                    <input type="number" id="monitorInterval" value="30" min="10" max="300">
+                </div>
+                <button class="btn" onclick="startMonitoring()">▶️ 開始監控</button>
+                <button class="btn btn-secondary" onclick="stopMonitoring()">⏹️ 停止監控</button>
+                
+                <div id="mentionsContainer" class="mentions-list" style="display: none;">
+                    <h3>最近的 @ 提醒</h3>
+                    <div id="mentionsList"></div>
+                </div>
+            </div>
+
+            <!-- 通知設定區塊 -->
+            <div class="section">
+                <h2>📢 通知設定</h2>
+                <div class="form-group">
+                    <label for="notificationKeywords">關鍵字過濾 (用逗號分隔):</label>
+                    <input type="text" id="notificationKeywords" placeholder="緊急,重要,急件">
+                    <small style="color: #666; display: block; margin-top: 5px;">只顯示包含這些關鍵字的 @ 提醒</small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableSoundNotification" checked> 🔊 啟用聲音提醒
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableDesktopNotification" checked> 🖥️ 啟用桌面通知
+                    </label>
+                </div>
+                <button class="btn" onclick="saveNotificationSettings()">💾 儲存通知設定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全域變數
+        let monitoringInterval = null;
+        let lastMentionTime = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            loadNotificationSettings();
+        });
+
+        // 載入設定
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('lineOASettings') || '{}');
+            document.getElementById('channelId').value = settings.channelId || '';
+            document.getElementById('channelSecret').value = settings.channelSecret || '';
+            document.getElementById('accessToken').value = settings.accessToken || '';
+            document.getElementById('webhookUrl').value = settings.webhookUrl || '';
+            document.getElementById('groupId').value = settings.groupId || '';
+        }
+
+        // 儲存設定
+        function saveSettings() {
+            const settings = {
+                channelId: document.getElementById('channelId').value,
+                channelSecret: document.getElementById('channelSecret').value,
+                accessToken: document.getElementById('accessToken').value,
+                webhookUrl: document.getElementById('webhookUrl').value,
+                groupId: document.getElementById('groupId').value
+            };
+            
+            localStorage.setItem('lineOASettings', JSON.stringify(settings));
+            showStatus('設定已儲存！', 'success');
+        }
+
+        // 載入通知設定
+        function loadNotificationSettings() {
+            const settings = JSON.parse(localStorage.getItem('notificationSettings') || '{}');
+            document.getElementById('notificationKeywords').value = settings.keywords || '';
+            document.getElementById('enableSoundNotification').checked = settings.enableSound !== false;
+            document.getElementById('enableDesktopNotification').checked = settings.enableDesktop !== false;
+        }
+
+        // 儲存通知設定
+        function saveNotificationSettings() {
+            const settings = {
+                keywords: document.getElementById('notificationKeywords').value,
+                enableSound: document.getElementById('enableSoundNotification').checked,
+                enableDesktop: document.getElementById('enableDesktopNotification').checked
+            };
+            
+            localStorage.setItem('notificationSettings', JSON.stringify(settings));
+            showStatus('通知設定已儲存！', 'success');
+        }
+
+        // 測試連線
+        async function testConnection() {
+            const channelId = document.getElementById('channelId').value;
+            const accessToken = document.getElementById('accessToken').value;
+            
+            if (!channelId || !accessToken) {
+                showStatus('請先填入 Channel ID 和 Access Token', 'error');
+                return;
+            }
+
+            showStatus('正在測試連線...', 'info');
+            
+            try {
+                const response = await fetch('/api/line/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channelId,
+                        accessToken
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('連線成功！Bot 名稱：' + result.profile.displayName, 'success');
+                } else {
+                    showStatus('連線失敗：' + (result.error || '請檢查設定'), 'error');
+                }
+            } catch (error) {
+                showStatus('連線測試失敗：' + error.message, 'error');
+            }
+        }
+
+        // 取得群組資訊
+        async function getGroupInfo() {
+            const groupId = document.getElementById('groupId').value;
+            const accessToken = document.getElementById('accessToken').value;
+            
+            if (!groupId || !accessToken) {
+                showStatus('請先填入群組 ID 和 Access Token', 'error');
+                return;
+            }
+
+            showStatus('正在取得群組資訊...', 'info');
+            
+            try {
+                // 模擬 API 呼叫
+                const groupInfo = await simulateGetGroupInfo(groupId, accessToken);
+                displayGroupInfo(groupInfo);
+                showStatus('群組資訊已取得！', 'success');
+            } catch (error) {
+                showStatus('取得群組資訊失敗：' + error.message, 'error');
+            }
+        }
+
+        // 取得群組成員
+        async function getGroupMembers() {
+            const groupId = document.getElementById('groupId').value;
+            const accessToken = document.getElementById('accessToken').value;
+            
+            if (!groupId || !accessToken) {
+                showStatus('請先填入群組 ID 和 Access Token', 'error');
+                return;
+            }
+
+            showStatus('正在取得群組成員...', 'info');
+            
+            try {
+                const response = await fetch(`/api/line/group/${groupId}/members?accessToken=${accessToken}`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayGroupMembers(result.members);
+                    showStatus('群組成員已取得！', 'success');
+                } else {
+                    showStatus('取得群組成員失敗：' + (result.error || '請檢查群組 ID'), 'error');
+                }
+            } catch (error) {
+                showStatus('取得群組成員失敗：' + error.message, 'error');
+            }
+        }
+
+        // 開始監控
+        function startMonitoring() {
+            const groupId = document.getElementById('groupId').value;
+            const interval = document.getElementById('monitorInterval').value;
+            
+            if (!groupId) {
+                showStatus('請先填入群組 ID', 'error');
+                return;
+            }
+
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+            }
+
+            monitoringInterval = setInterval(() => {
+                checkMentions(groupId);
+            }, interval * 1000);
+
+            showStatus('監控已開始！', 'success');
+            document.getElementById('mentionsContainer').style.display = 'block';
+        }
+
+        // 停止監控
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+                showStatus('監控已停止！', 'info');
+            }
+        }
+
+        // 檢查 @ 提醒
+        async function checkMentions(groupId) {
+            try {
+                const response = await fetch(`/api/mentions?groupId=${groupId}&limit=10`);
+                const mentions = await response.json();
+                
+                if (mentions.length > 0) {
+                    // 轉換格式以符合前端顯示需求
+                    const formattedMentions = mentions.map(mention => ({
+                        userName: mention.userName,
+                        message: mention.message,
+                        timestamp: mention.timestamp
+                    }));
+                    
+                    displayMentions(formattedMentions);
+                    sendNotifications(formattedMentions);
+                }
+            } catch (error) {
+                console.error('檢查 @ 提醒失敗：', error);
+            }
+        }
+
+        // 顯示群組資訊
+        function displayGroupInfo(groupInfo) {
+            const container = document.getElementById('groupInfo');
+            const content = document.getElementById('groupInfoContent');
+            
+            content.innerHTML = `
+                <div class="mention-item">
+                    <div class="mention-info">
+                        <div class="mention-user">群組名稱：${groupInfo.groupName || '未知'}</div>
+                        <div class="mention-time">群組 ID：${groupInfo.groupId || groupInfo.id}</div>
+                        <div class="mention-message">成員數量：${groupInfo.count || '未知'} 人</div>
+                    </div>
+                </div>
+            `;
+            
+            container.style.display = 'block';
+        }
+
+        // 顯示群組成員
+        function displayGroupMembers(members) {
+            const container = document.getElementById('groupInfo');
+            const content = document.getElementById('groupInfoContent');
+            
+            let membersHtml = '<h4>群組成員：</h4>';
+            members.forEach(member => {
+                membersHtml += `
+                    <div class="mention-item">
+                        <div class="mention-info">
+                            <div class="mention-user">${member.displayName}</div>
+                            <div class="mention-time">用戶 ID：${member.userId}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            content.innerHTML = membersHtml;
+            container.style.display = 'block';
+        }
+
+        // 顯示 @ 提醒
+        function displayMentions(mentions) {
+            const container = document.getElementById('mentionsList');
+            let mentionsHtml = '';
+            
+            mentions.forEach(mention => {
+                mentionsHtml += `
+                    <div class="mention-item">
+                        <div class="mention-info">
+                            <div class="mention-user">@${mention.userName}</div>
+                            <div class="mention-time">${new Date(mention.timestamp).toLocaleString('zh-TW')}</div>
+                            <div class="mention-message">${mention.message}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = mentionsHtml + container.innerHTML;
+        }
+
+        // 發送通知
+        function sendNotifications(mentions) {
+            const settings = JSON.parse(localStorage.getItem('notificationSettings') || '{}');
+            
+            // 過濾關鍵字
+            const filteredMentions = filterMentionsByKeywords(mentions, settings.keywords);
+            
+            if (filteredMentions.length > 0) {
+                // 播放聲音提醒
+                if (settings.enableSound !== false) {
+                    playNotificationSound();
+                }
+                
+                // 發送桌面通知
+                if (settings.enableDesktop !== false) {
+                    sendDesktopNotification(filteredMentions);
+                }
+                
+                // 高亮顯示新的 @ 提醒
+                highlightNewMentions(filteredMentions);
+            }
+        }
+
+        // 根據關鍵字過濾 @ 提醒
+        function filterMentionsByKeywords(mentions, keywords) {
+            if (!keywords || keywords.trim() === '') {
+                return mentions;
+            }
+            
+            const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
+            return mentions.filter(mention => {
+                const message = mention.message.toLowerCase();
+                return keywordList.some(keyword => message.includes(keyword));
+            });
+        }
+
+        // 播放通知聲音
+        function playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+                audio.volume = 0.3;
+                audio.play();
+            } catch (error) {
+                console.log('無法播放通知聲音');
+            }
+        }
+
+        // 發送桌面通知
+        function sendDesktopNotification(mentions) {
+            if (!('Notification' in window)) {
+                return;
+            }
+            
+            if (Notification.permission === 'granted') {
+                mentions.forEach(mention => {
+                    new Notification('新的 @ 提醒', {
+                        body: `@${mention.userName}: ${mention.message}`,
+                        icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiMwMEI5MDAiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
+                        tag: `mention-${Date.now()}`
+                    });
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        sendDesktopNotification(mentions);
+                    }
+                });
+            }
+        }
+
+        // 高亮顯示新的 @ 提醒
+        function highlightNewMentions(mentions) {
+            const container = document.getElementById('mentionsList');
+            const newMentionsHtml = mentions.map(mention => `
+                <div class="mention-item" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 4px solid #00B900; animation: highlight 2s ease-in-out;">
+                    <div class="mention-info">
+                        <div class="mention-user" style="color: #00B900; font-weight: bold;">@${mention.userName}</div>
+                        <div class="mention-time">${new Date(mention.timestamp).toLocaleString('zh-TW')}</div>
+                        <div class="mention-message">${mention.message}</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = newMentionsHtml + container.innerHTML;
+        }
+
+        // 顯示狀態訊息
+        function showStatus(message, type) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            
+            const mainContent = document.querySelector('.main-content');
+            mainContent.insertBefore(statusDiv, mainContent.firstChild);
+            
+            setTimeout(() => {
+                statusDiv.remove();
+            }, 5000);
+        }
+
+
+    </script>
+</body>
+</html>
