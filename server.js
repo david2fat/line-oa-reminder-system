@@ -65,8 +65,11 @@ app.post('/api/line/test-connection', async (req, res) => {
         
         const { channelId, accessToken } = req.body;
         
+        // 優先使用前端輸入的 Access Token，如果沒有則使用環境變數
+        const tokenToUse = accessToken || process.env.LINE_ACCESS_TOKEN;
+        
         // 驗證必要參數
-        if (!accessToken) {
+        if (!tokenToUse) {
             console.log('缺少 Access Token');
             return res.status(400).json({ 
                 success: false, 
@@ -78,7 +81,7 @@ app.post('/api/line/test-connection', async (req, res) => {
         
         const response = await axios.get(`${LINE_API_BASE}/bot/profile`, {
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': `Bearer ${tokenToUse}`
             },
             timeout: 10000 // 10 秒超時
         });
@@ -87,7 +90,8 @@ app.post('/api/line/test-connection', async (req, res) => {
         
         res.json({ 
             success: true, 
-            profile: response.data 
+            profile: response.data,
+            tokenSource: accessToken ? '前端輸入' : '環境變數'
         });
     } catch (error) {
         console.error('LINE 連線測試失敗:', error.response?.data || error.message);
@@ -117,9 +121,19 @@ app.get('/api/line/group/:groupId', async (req, res) => {
         const { groupId } = req.params;
         const { accessToken } = req.query;
         
+        // 優先使用前端輸入的 Access Token，如果沒有則使用環境變數
+        const tokenToUse = accessToken || process.env.LINE_ACCESS_TOKEN;
+        
+        if (!tokenToUse) {
+            return res.status(400).json({ 
+                success: false, 
+                error: '請提供 Access Token' 
+            });
+        }
+        
         const response = await axios.get(`${LINE_API_BASE}/bot/group/${groupId}/summary`, {
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': `Bearer ${tokenToUse}`
             }
         });
         
@@ -139,9 +153,19 @@ app.get('/api/line/group/:groupId/members', async (req, res) => {
         const { groupId } = req.params;
         const { accessToken } = req.query;
         
+        // 優先使用前端輸入的 Access Token，如果沒有則使用環境變數
+        const tokenToUse = accessToken || process.env.LINE_ACCESS_TOKEN;
+        
+        if (!tokenToUse) {
+            return res.status(400).json({ 
+                success: false, 
+                error: '請提供 Access Token' 
+            });
+        }
+        
         const response = await axios.get(`${LINE_API_BASE}/bot/group/${groupId}/members/ids`, {
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': `Bearer ${tokenToUse}`
             }
         });
         
@@ -151,7 +175,7 @@ app.get('/api/line/group/:groupId/members', async (req, res) => {
                 try {
                     const profileResponse = await axios.get(`${LINE_API_BASE}/bot/group/${groupId}/member/${userId}`, {
                         headers: {
-                            'Authorization': `Bearer ${accessToken}`
+                            'Authorization': `Bearer ${tokenToUse}`
                         }
                     });
                     return profileResponse.data;
