@@ -27,20 +27,52 @@ function verifySignature(body, signature, channelSecret) {
 // 測試 LINE 連線
 app.post('/api/line/test-connection', async (req, res) => {
     try {
+        console.log('收到測試連線請求:', req.body);
+        
         const { channelId, accessToken } = req.body;
+        
+        // 驗證必要參數
+        if (!accessToken) {
+            console.log('缺少 Access Token');
+            return res.status(400).json({ 
+                success: false, 
+                error: '請提供 Access Token' 
+            });
+        }
+        
+        console.log('正在測試 LINE API 連線...');
         
         const response = await axios.get(`${LINE_API_BASE}/bot/profile`, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`
-            }
+            },
+            timeout: 10000 // 10 秒超時
         });
         
-        res.json({ success: true, profile: response.data });
+        console.log('LINE API 連線成功:', response.data);
+        
+        res.json({ 
+            success: true, 
+            profile: response.data 
+        });
     } catch (error) {
         console.error('LINE 連線測試失敗:', error.response?.data || error.message);
+        
+        let errorMessage = '連線失敗，請檢查 Access Token';
+        
+        if (error.response?.status === 401) {
+            errorMessage = 'Access Token 無效或已過期';
+        } else if (error.response?.status === 403) {
+            errorMessage = 'Access Token 權限不足';
+        } else if (error.code === 'ECONNABORTED') {
+            errorMessage = '連線超時，請稍後再試';
+        } else if (error.code === 'ENOTFOUND') {
+            errorMessage = '無法連接到 LINE 伺服器';
+        }
+        
         res.status(400).json({ 
             success: false, 
-            error: '連線失敗，請檢查 Channel ID 和 Access Token' 
+            error: errorMessage 
         });
     }
 });

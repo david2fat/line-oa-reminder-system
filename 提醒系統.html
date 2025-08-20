@@ -390,12 +390,15 @@
 
                 const result = await response.json();
                 
-                if (result.success) {
+                if (response.ok && result.success) {
                     showStatus('連線成功！Bot 名稱：' + result.profile.displayName, 'success');
                 } else {
-                    showStatus('連線失敗：' + (result.error || '請檢查設定'), 'error');
+                    const errorMessage = result.error || '請檢查設定';
+                    showStatus('連線失敗：' + errorMessage, 'error');
+                    console.error('API 錯誤:', result);
                 }
             } catch (error) {
+                console.error('網路錯誤:', error);
                 showStatus('連線測試失敗：' + error.message, 'error');
             }
         }
