@@ -126,52 +126,89 @@ app.get('/api/line/group/:groupId/messages', async (req, res) => {
 });
 
 // LINE Webhook 接收端點
-app.post('/webhook', (req, res) => {
-    const signature = req.headers['x-line-signature'];
-    const body = JSON.stringify(req.body);
-    
-    // 從環境變數或資料庫取得 channel secret
-    const channelSecret = process.env.LINE_CHANNEL_SECRET;
-    
-    if (!verifySignature(body, signature, channelSecret)) {
-        return res.status(400).json({ error: '簽名驗證失敗' });
-    }
-    
-    const events = req.body.events;
-    
-    events.forEach(async (event) => {
-        if (event.type === 'message' && event.message.type === 'text') {
-            await processMessage(event);
+app.post('/webhook', async (req, res) => {
+    try {
+        const signature = req.headers['x-line-signature'];
+        const body = JSON.stringify(req.body);
+        
+        // 從環境變數或資料庫取得 channel secret
+        const channelSecret = process.env.LINE_CHANNEL_SECRET;
+        
+        // 如果沒有設定 channel secret，跳過驗證（僅用於測試）
+        if (channelSecret && !verifySignature(body, signature, channelSecret)) {
+            console.log('簽名驗證失敗');
+            return res.status(400).json({ error: '簽名驗證失敗' });
         }
-    });
-    
-    res.json({ success: true });
+        
+        const events = req.body.events || [];
+        console.log('收到 LINE Webhook 事件:', events.length, '個事件');
+        
+        // 處理每個事件
+        for (const event of events) {
+            if (event.type === 'message' && event.message && event.message.type === 'text') {
+                try {
+                    await processMessage(event);
+                } catch (error) {
+                    console.error('處理訊息失敗:', error);
+                }
+            }
+        }
+        
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Webhook 處理失敗:', error);
+        res.status(500).json({ error: '內部伺服器錯誤' });
+    }
 });
 
 // 處理訊息並檢查 @ 提醒
 async function processMessage(event) {
-    const { message, source, timestamp } = event;
-    const text = message.text;
-    
-    // 檢查是否包含 @ 符號
-    const mentionPattern = /@(\w+)/g;
-    const mentions = text.match(mentionPattern);
-    
-    if (mentions && mentions.length > 0) {
-        const mentionData = {
-            groupId: source.groupId,
-            userId: source.userId,
-            userName: await getUserDisplayName(source.userId, source.groupId),
-            message: text,
-            mentions: mentions,
-            timestamp: timestamp
-        };
+    try {
+        const { message, source, timestamp } = event;
         
-        // 儲存到資料庫或記憶體
-        saveMention(mentionData);
+        if (!message || !message.text) {
+            console.log('忽略非文字訊息');
+            return;
+        }
         
-        // 發送通知
-        await sendNotifications(mentionData);
+        const text = message.text;
+        console.log('處理訊息:', text);
+        
+        // 檢查是否包含 @ 符號
+        const mentionPattern = /@(\w+)/g;
+        const mentions = text.match(mentionPattern);
+        
+        if (mentions && mentions.length > 0) {
+            console.log('發現 @ 提醒:', mentions);
+            
+            let userName = '未知用戶';
+            try {
+                userName = await getUserDisplayName(source.userId, source.groupId);
+            } catch (error) {
+                console.error('取得用戶名稱失敗:', error);
+            }
+            
+            const mentionData = {
+                groupId: source.groupId,
+                userId: source.userId,
+                userName: userName,
+                message: text,
+                mentions: mentions,
+                timestamp: timestamp
+            };
+            
+            // 儲存到資料庫或記憶體
+            saveMention(mentionData);
+            
+            // 發送通知
+            try {
+                await sendNotifications(mentionData);
+            } catch (error) {
+                console.error('發送通知失敗:', error);
+            }
+        }
+    } catch (error) {
+        console.error('處理訊息失敗:', error);
     }
 }
 
@@ -179,13 +216,21 @@ async function processMessage(event) {
 async function getUserDisplayName(userId, groupId) {
     try {
         const accessToken = process.env.LINE_ACCESS_TOKEN;
+        
+        if (!accessToken) {
+            console.log('未設定 LINE_ACCESS_TOKEN，使用預設用戶名稱');
+            return '未知用戶';
+        }
+        
         const response = await axios.get(`${LINE_API_BASE}/bot/group/${groupId}/member/${userId}`, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`
             }
         });
-        return response.data.displayName;
+        
+        return response.data.displayName || '未知用戶';
     } catch (error) {
+        console.error('取得用戶名稱失敗:', error.response?.data || error.message);
         return '未知用戶';
     }
 }
