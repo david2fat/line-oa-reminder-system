@@ -270,15 +270,33 @@
                 </div>
             </div>
 
-            <!-- @ 提醒監控區塊 -->
+            <!-- 群組監控管理區塊 -->
             <div class="section">
-                <h2>🔔 @ 提醒監控</h2>
+                <h2>👥 群組監控管理</h2>
                 <div class="form-group">
-                    <label for="monitorInterval">監控間隔 (秒):</label>
+                    <label for="monitorInterval">檢查間隔 (秒):</label>
                     <input type="number" id="monitorInterval" value="30" min="10" max="300">
                 </div>
                 <button class="btn" onclick="startMonitoring()">▶️ 開始監控</button>
                 <button class="btn btn-secondary" onclick="stopMonitoring()">⏹️ 停止監控</button>
+                <button class="btn btn-secondary" onclick="refreshGroups()">🔄 重新整理群組</button>
+                
+                <div id="groupsContainer" class="mentions-list" style="display: none;">
+                    <h3>監控中的群組</h3>
+                    <div id="groupsList"></div>
+                </div>
+            </div>
+
+            <!-- @ 提醒顯示區塊 -->
+            <div class="section">
+                <h2>🔔 @ 提醒記錄</h2>
+                <div class="form-group">
+                    <label for="filterGroup">篩選群組:</label>
+                    <select id="filterGroup">
+                        <option value="">所有群組</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="refreshMentions()">🔄 重新整理</button>
                 
                 <div id="mentionsContainer" class="mentions-list" style="display: none;">
                     <h3>最近的 @ 提醒</h3>
@@ -471,24 +489,52 @@
 
         // 開始監控
         function startMonitoring() {
-            const groupId = document.getElementById('groupId').value;
             const interval = document.getElementById('monitorInterval').value;
             
-            if (!groupId) {
-                showStatus('請先填入群組 ID', 'error');
-                return;
-            }
-
             if (monitoringInterval) {
                 clearInterval(monitoringInterval);
             }
 
             monitoringInterval = setInterval(() => {
-                checkMentions(groupId);
+                refreshGroups();
+                refreshMentions();
             }, interval * 1000);
 
             showStatus('監控已開始！', 'success');
+            document.getElementById('groupsContainer').style.display = 'block';
             document.getElementById('mentionsContainer').style.display = 'block';
+            
+            // 立即執行一次
+            refreshGroups();
+            refreshMentions();
+        }
+
+        // 重新整理群組列表
+        async function refreshGroups() {
+            try {
+                const response = await fetch('/api/groups');
+                const groups = await response.json();
+                
+                displayGroups(groups);
+                updateGroupFilter(groups);
+            } catch (error) {
+                console.error('取得群組列表失敗:', error);
+            }
+        }
+
+        // 重新整理 @ 提醒
+        async function refreshMentions() {
+            try {
+                const filterGroup = document.getElementById('filterGroup').value;
+                const url = filterGroup ? `/api/mentions?groupId=${filterGroup}&limit=50` : '/api/mentions?limit=50';
+                
+                const response = await fetch(url);
+                const mentions = await response.json();
+                
+                displayMentions(mentions);
+            } catch (error) {
+                console.error('取得 @ 提醒失敗:', error);
+            }
         }
 
         // 停止監控
@@ -561,24 +607,77 @@
             container.style.display = 'block';
         }
 
+        // 顯示群組列表
+        function displayGroups(groups) {
+            const container = document.getElementById('groupsList');
+            let groupsHtml = '';
+            
+            if (groups.length === 0) {
+                groupsHtml = '<div class="mention-item"><div class="mention-info">尚無群組資料</div></div>';
+            } else {
+                groups.forEach(group => {
+                    const lastMention = group.lastMention ? new Date(group.lastMention).toLocaleString('zh-TW') : '無';
+                    groupsHtml += `
+                        <div class="mention-item">
+                            <div class="mention-info">
+                                <div class="mention-user">${group.groupName}</div>
+                                <div class="mention-time">群組 ID: ${group.groupId}</div>
+                                <div class="mention-message">@ 提醒次數: ${group.mentionCount} | 最後提醒: ${lastMention}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            container.innerHTML = groupsHtml;
+        }
+
+        // 更新群組篩選選項
+        function updateGroupFilter(groups) {
+            const filterSelect = document.getElementById('filterGroup');
+            const currentValue = filterSelect.value;
+            
+            // 保留「所有群組」選項
+            filterSelect.innerHTML = '<option value="">所有群組</option>';
+            
+            groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.groupId;
+                option.textContent = `${group.groupName} (${group.mentionCount})`;
+                filterSelect.appendChild(option);
+            });
+            
+            // 恢復之前選擇的值
+            if (currentValue) {
+                filterSelect.value = currentValue;
+            }
+        }
+
         // 顯示 @ 提醒
         function displayMentions(mentions) {
             const container = document.getElementById('mentionsList');
             let mentionsHtml = '';
             
-            mentions.forEach(mention => {
-                mentionsHtml += `
-                    <div class="mention-item">
-                        <div class="mention-info">
-                            <div class="mention-user">@${mention.userName}</div>
-                            <div class="mention-time">${new Date(mention.timestamp).toLocaleString('zh-TW')}</div>
-                            <div class="mention-message">${mention.message}</div>
+            if (mentions.length === 0) {
+                mentionsHtml = '<div class="mention-item"><div class="mention-info">尚無 @ 提醒記錄</div></div>';
+            } else {
+                mentions.forEach(mention => {
+                    const mentionList = mention.mentions.join(', ');
+                    mentionsHtml += `
+                        <div class="mention-item">
+                            <div class="mention-info">
+                                <div class="mention-user">@${mention.userName}</div>
+                                <div class="mention-time">${new Date(mention.timestamp).toLocaleString('zh-TW')}</div>
+                                <div class="mention-message">群組: ${mention.groupName}</div>
+                                <div class="mention-message">提醒: ${mentionList}</div>
+                                <div class="mention-message">訊息: ${mention.message}</div>
+                            </div>
                         </div>
-                    </div>
-                `;
-            });
+                    `;
+                });
+            }
             
-            container.innerHTML = mentionsHtml + container.innerHTML;
+            container.innerHTML = mentionsHtml;
         }
 
         // 發送通知

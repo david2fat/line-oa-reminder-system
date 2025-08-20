@@ -264,27 +264,50 @@ async function processMessage(event) {
         const text = message.text;
         console.log('處理訊息:', text);
         
-        // 檢查是否包含 @ 符號
-        const mentionPattern = /@(\w+)/g;
-        const mentions = text.match(mentionPattern);
+        // 檢查是否包含 @ 符號（支援多種格式）
+        const mentionPatterns = [
+            /@(\w+)/g,                    // @用戶名
+            /@([^\s]+)/g,                 // @用戶名（包含特殊字元）
+            /@([^@\s]+)/g,                // @用戶名（不包含@和空格）
+            /@([^@\s]+)(?=\s|$)/g         // @用戶名（後面是空格或結尾）
+        ];
         
-        if (mentions && mentions.length > 0) {
-            console.log('發現 @ 提醒:', mentions);
+        let allMentions = [];
+        mentionPatterns.forEach(pattern => {
+            const matches = text.match(pattern);
+            if (matches) {
+                allMentions = allMentions.concat(matches);
+            }
+        });
+        
+        // 去重
+        allMentions = [...new Set(allMentions)];
+        
+        if (allMentions.length > 0) {
+            console.log('發現 @ 提醒:', allMentions);
             
             let userName = '未知用戶';
+            let groupName = '未知群組';
+            
             try {
+                // 取得發送者名稱
                 userName = await getUserDisplayName(source.userId, source.groupId);
+                
+                // 取得群組名稱
+                groupName = await getGroupName(source.groupId);
             } catch (error) {
-                console.error('取得用戶名稱失敗:', error);
+                console.error('取得用戶或群組資訊失敗:', error);
             }
             
             const mentionData = {
                 groupId: source.groupId,
+                groupName: groupName,
                 userId: source.userId,
                 userName: userName,
                 message: text,
-                mentions: mentions,
-                timestamp: timestamp
+                mentions: allMentions,
+                timestamp: timestamp,
+                messageId: message.id || null
             };
             
             // 儲存到資料庫或記憶體
@@ -296,6 +319,9 @@ async function processMessage(event) {
             } catch (error) {
                 console.error('發送通知失敗:', error);
             }
+            
+            // 可選：在群組中回覆確認
+            await sendMentionConfirmation(source.groupId, mentionData);
         }
     } catch (error) {
         console.error('處理訊息失敗:', error);
@@ -322,6 +348,29 @@ async function getUserDisplayName(userId, groupId) {
     } catch (error) {
         console.error('取得用戶名稱失敗:', error.response?.data || error.message);
         return '未知用戶';
+    }
+}
+
+// 取得群組名稱
+async function getGroupName(groupId) {
+    try {
+        const accessToken = process.env.LINE_ACCESS_TOKEN;
+        
+        if (!accessToken) {
+            console.log('未設定 LINE_ACCESS_TOKEN，使用預設群組名稱');
+            return '未知群組';
+        }
+        
+        const response = await axios.get(`${LINE_API_BASE}/bot/group/${groupId}/summary`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+        
+        return response.data.groupName || '未知群組';
+    } catch (error) {
+        console.error('取得群組名稱失敗:', error.response?.data || error.message);
+        return '未知群組';
     }
 }
 
@@ -353,6 +402,54 @@ app.get('/api/mentions', (req, res) => {
     res.json(mentions.slice(0, parseInt(limit)));
 });
 
+// 取得所有監控的群組
+app.get('/api/groups', (req, res) => {
+    const mentions = global.mentions || [];
+    const groups = {};
+    
+    mentions.forEach(mention => {
+        if (!groups[mention.groupId]) {
+            groups[mention.groupId] = {
+                groupId: mention.groupId,
+                groupName: mention.groupName,
+                mentionCount: 0,
+                lastMention: null
+            };
+        }
+        groups[mention.groupId].mentionCount++;
+        if (!groups[mention.groupId].lastMention || mention.timestamp > groups[mention.groupId].lastMention) {
+            groups[mention.groupId].lastMention = mention.timestamp;
+        }
+    });
+    
+    res.json(Object.values(groups));
+});
+
+// 取得特定群組的統計資訊
+app.get('/api/groups/:groupId/stats', (req, res) => {
+    const { groupId } = req.params;
+    const mentions = global.mentions || [];
+    const groupMentions = mentions.filter(m => m.groupId === groupId);
+    
+    const stats = {
+        groupId: groupId,
+        totalMentions: groupMentions.length,
+        uniqueUsers: [...new Set(groupMentions.map(m => m.userId))].length,
+        mentionsByUser: {},
+        recentMentions: groupMentions.slice(0, 10)
+    };
+    
+    // 統計每個用戶的 @ 提醒次數
+    groupMentions.forEach(mention => {
+        if (!stats.mentionsByUser[mention.userName]) {
+            stats.mentionsByUser[mention.userName] = 0;
+        }
+        stats.mentionsByUser[mention.userName]++;
+    });
+    
+    res.json(stats);
+});
+
 // 發送通知
 async function sendNotifications(mentionData) {
     // Email 通知
@@ -363,6 +460,45 @@ async function sendNotifications(mentionData) {
     // Webhook 通知
     if (process.env.WEBHOOK_URL) {
         await sendWebhookNotification(mentionData);
+    }
+}
+
+// 在群組中回覆確認 @ 提醒
+async function sendMentionConfirmation(groupId, mentionData) {
+    try {
+        const accessToken = process.env.LINE_ACCESS_TOKEN;
+        
+        if (!accessToken) {
+            console.log('未設定 LINE_ACCESS_TOKEN，跳過群組回覆');
+            return;
+        }
+        
+        // 檢查是否啟用群組回覆功能
+        if (process.env.ENABLE_GROUP_REPLY !== 'true') {
+            return;
+        }
+        
+        const mentionList = mentionData.mentions.join(', ');
+        const replyMessage = `✅ 已記錄 @ 提醒\n\n📝 發送者：${mentionData.userName}\n👥 群組：${mentionData.groupName}\n🔔 提醒對象：${mentionList}\n⏰ 時間：${new Date(mentionData.timestamp).toLocaleString('zh-TW')}`;
+        
+        const response = await axios.post(`${LINE_API_BASE}/bot/message/push`, {
+            to: groupId,
+            messages: [
+                {
+                    type: 'text',
+                    text: replyMessage
+                }
+            ]
+        }, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('群組回覆已發送');
+    } catch (error) {
+        console.error('發送群組回覆失敗:', error.response?.data || error.message);
     }
 }
 
